@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>Snake - The Game</title>
+        <style>
+            * {
+                padding: 0;
+                margin: 0;
+            }
+            html, body {
+                width: 100%;
+                height: 100%;
+            }
+            body {
+                background: #111;
+                display: flex;
+                flex-direction: column;
+                justify-content: space-around;
+                align-items: center;
+                position: relative;
+            }
+            button {
+                display: none;
+                cursor: pointer;
+            }
+            img {
+                max-width: 500px;
+            }
+
+        </style>
+    </head>
+    <body onkeydown="controller(event)" onload="startGame()">
+        <score style="font-size: 24px;color:#fff;text-shadow: 1px 1px 10px rgba(255,255,255,.4);position: fixed;top:20px;left:20px;opacity: .4;">0 pontos</score>
+        <script type="text/javascript">
+
+            const canvas = document.createElement("canvas");
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            const body = document.querySelector("body");
+            const score = document.querySelector("score");
+            var speed = 1;
+            var tails = [];
+            var slotSize = 20;
+            var player = null;
+            var board = null;
+            var food = null;
+            var boardSize = (canvas.width - (canvas.width % 20)) / 20;
+            var boardSizeH = (canvas.height - (canvas.height % 20)) / 20;
+            var poisons = [];
+            var numberOfPoisons = Math.ceil(boardSize * boardSizeH / 200);
+            var points = 0;
+
+            function startGame() {
+                myGameArea.start();
+                board = new boardC();
+                for(let p = 0; p < numberOfPoisons; p++) {
+                    poisons.push(new poisonObject());
+                }
+                player = new snake();
+                food = new apple();
+            }
+
+            function getMousePos(canvas, evt) {
+                var rect = canvas.getBoundingClientRect();
+                return {
+                    x: evt.clientX - rect.left,
+                    y: evt.clientY - rect.top
+                };
+            }
+
+            var myGameArea = {
+                start : function() {
+                    if(document.getElementById('fail')) {
+                        document.getElementById('fail').remove();
+                    }
+                    this.context = canvas.getContext("2d");
+                    document.body.insertBefore(canvas, document.body.childNodes[0]);
+                    this.interval = setInterval(updateGameArea,80);
+                },
+                clear : function() {
+                    this.context.clearRect(0, 0, canvas.width, canvas.height);
+                }, end: function() {
+                    canvas.remove();
+                    let fail = new Image();
+                    fail.src = "fail.png";
+                    fail.id = "fail";
+                    body.appendChild(fail);
+                    const btns = document.querySelectorAll('button');
+                    btns.forEach(btn => {
+                        btn.style.display = 'block';
+                    })
+                    document.querySelector('#nickname').style.display = 'block';
+                    document.querySelector('.hideAfterGame').style.display = 'none';
+                    getScores();
+                }
+            }
+
+            function boardC() {
+                this.width = slotSize * boardSize;
+                this.height = slotSize * boardSizeH;
+                this.x = 0;
+                this.y = 0;
+                this.update = function(){
+                    ctx = myGameArea.context;
+                    ctx.lineWidth = 1.1;
+                    ctx.strokeStyle = "#232332";
+                    ctx.shadowBlur = 0;
+                    for (let i = 1; i < boardSize; i++) {
+                        let f = (canvas.width / boardSize) * i;
+                        ctx.beginPath();
+                        ctx.moveTo(f, 0);
+                        ctx.lineTo(f, canvas.height);
+                        ctx.stroke();
+                        ctx.beginPath();
+                        ctx.moveTo(0, f);
+                        ctx.lineTo(canvas.width, f);
+                        ctx.stroke();
+                        ctx.closePath();
+                    }
+                    // ctx.fillStyle = '#222222';
+                    // ctx.fillRect(this.x, this.y, this.width, this.height);
+                }
+            }
+
+            function snake() {
+                this.width = slotSize;
+                this.height = slotSize;
+                this.x = (slotSize * boardSize * Math.random());
+                this.x = this.x - (this.x % slotSize);
+                this.y = (slotSize * boardSize * Math.random());
+                this.y = this.y - (this.y % slotSize);
+                let found = true;
+                while(found) {
+                    foundInFor = false;
+                    for(let p = 0; p < poisons.length; p++) {
+                        if(this.x === poisons[p].x && this.y === poisons[p].y) {
+                            this.x = slotSize + ((board.width - slotSize - slotSize) * Math.random());
+                            this.y = slotSize + ((board.height - slotSize - slotSize) * Math.random());
+                            this.x = this.x - (this.x % slotSize);
+                            this.y = this.y - (this.y % slotSize);
+                            foundInFor = true;
+                        }
+                    }
+                    found = foundInFor ? true : false;
+                }
+
+                this.lastX = 0;
+                this.lastY = 0;
+                this.contactX = this.x;
+                this.contactY = this.y;
+                this.speedX = 0;
+                this.speedY = 0;
+                this.tailCount = 0;
+                this.color = "#ffffff"
+                this.update = function(){
+                    ctx = myGameArea.context;
+                    ctx.beginPath();
+                    ctx.fillStyle = this.color;
+                    ctx.fillRect(this.x, this.y, this.width, this.height);
+                    ctx.closePath();
+                }
+                this.eat = function() {
+                    this.tailCount++;
+                    father = tails.length == 0 ? this : tails[tails.length - 1];
+                    tails.push(new tail(father, father.tailCount, food.color));
+                    food.newPos();
+                    points++;
+                    score.innerHTML = points.toString()+ " pontos";
+                },
+                this.newPos = function() {
+                    this.lastX = this.x;
+                    this.lastY = this.y;
+                    this.x += (this.speedX * slotSize);
+                    this.y += (this.speedY * slotSize);
+                }
+            }
+
+            function tail(father, pos, color) {
+                this.width = father.width;
+                this.height = father.height;
+                this.x = father.lastX;
+                this.y = father.lastY;
+                this.contactX = father.lastContactX;
+                this.contactY = father.lastContactX;
+                this.lastContactX = 0;
+                this.lastContactX = 0;
+                this.lastX = 0;
+                this.lastY = 0;
+                this.pos = pos;
+                this.color = "#ffffff"
+                this.update = function(){
+                    ctx = myGameArea.context;
+                    ctx.beginPath();
+                    ctx.fillStyle = this.color;
+                    ctx.fillRect(this.x, this.y, this.width, this.height);
+                    ctx.closePath();
+                }
+                this.newPos = function() {
+                    this.lastX = this.x;
+                    this.lastY = this.y;
+                    this.x = father.lastX;
+                    this.y = father.lastY;
+                    this.contactX = father.lastContactX;
+                    this.contactY = father.lastContactX;
+                }
+            }
+
+            function apple() {
+                this.width = slotSize;
+                this.height = slotSize;
+                this.x = (slotSize * 2) + ((board.width - (slotSize * 4)) * Math.random());
+                this.y = (slotSize * 2) + ((board.height - (slotSize * 4)) * Math.random());
+                this.x = this.x - (this.x % slotSize);
+                this.y = this.y - (this.y % slotSize);
+
+                let found = true;
+                while(found) {
+                    foundInFor = false;
+                    for(let p = 0; p < poisons.length; p++) {
+                        if((this.x === poisons[p].x && this.y === poisons[p].y) || (this.x === player.x && this.y === player.y)) {
+                            this.x = (slotSize * 2) + ((board.width - (slotSize * 4)) * Math.random());
+                            this.y = (slotSize * 2) + ((board.height - (slotSize * 4)) * Math.random());
+                            this.x = this.x - (this.x % slotSize);
+                            this.y = this.y - (this.y % slotSize);
+                            foundInFor = true;
+                        }
+                    }
+                    found = foundInFor ? true : false;
+                }
+                
+                this.color = "#22dd22";
+                this.update = function(){
+                    ctx = myGameArea.context;
+                    ctx.beginPath();
+                    ctx.globalCompositeOperation = "lighter";
+                    ctx.shadowBlur = 20;
+                    ctx.shadowColor = this.color;
+                    ctx.arc(this.x+10, this.y+10, 5, 0, Math.PI*2);
+                    ctx.fillStyle = this.color;
+                    ctx.fill();
+                    ctx.globalCompositeOperation = "source-over";
+                    ctx.shadowBlur = 0;
+                    ctx.closePath();
+                }
+                this.newPos = function() {
+                    this.x = (slotSize * 2) + ((board.width - (slotSize * 4)) * Math.random());
+                    this.x = this.x - (this.x % slotSize);
+                    this.y = (slotSize * 2) + ((board.height - (slotSize * 4)) * Math.random());
+                    this.y = this.y - (this.y % slotSize);
+                    let found = true;
+                    while(found) {
+                        foundInFor = false;
+                        for(let p = 0; p < poisons.length; p++) {
+                            if((this.x === poisons[p].x && this.y === poisons[p].y) || (this.x === player.x && this.y === player.y)) {
+                                this.x = (slotSize * 2) + ((board.width - (slotSize * 4)) * Math.random());
+                                this.y = (slotSize * 2) + ((board.height - (slotSize * 4)) * Math.random());
+                                this.x = this.x - (this.x % slotSize);
+                                this.y = this.y - (this.y % slotSize);
+                                foundInFor = true;
+                            }
+                        }
+                        found = foundInFor ? true : false;
+                    }
+                }
+            }
+
+            function poisonObject() {
+                this.width = slotSize;
+                this.height = slotSize;
+
+                this.x = slotSize + ((board.width - slotSize - slotSize) * Math.random());
+                this.y = slotSize + ((board.height - slotSize - slotSize) * Math.random());
+                this.x = this.x - (this.x % slotSize);
+                this.y = this.y - (this.y % slotSize);
+
+                this.color = "#dd2222";
+                this.update = function(){
+                    ctx = myGameArea.context;
+                    ctx.beginPath();
+                    ctx.globalCompositeOperation = "lighter";
+                    ctx.shadowBlur = 20;
+                    ctx.shadowColor = this.color;
+                    ctx.arc(this.x+10, this.y+10, 5, 0, Math.PI*2);
+                    ctx.fillStyle = this.color;
+                    ctx.fill();
+                    ctx.globalCompositeOperation = "source-over";
+                    ctx.shadowBlur = 0;
+                    ctx.closePath();
+                }
+            }
+            
+            function updateGameArea() {
+                myGameArea.clear();
+                board.update();
+                if(player) {
+                    player.newPos();
+                    for(let p = 0; p < poisons.length; p++) {
+                        poisons[p].update();
+                    }
+                    food.update();
+                    if(player.x === food.x && player.y === food.y) {
+                        player.eat();
+                    }
+                    for(let p = 0; p < poisons.length; p++) {
+                        if(player.x === poisons[p].x && player.y === poisons[p].y) {
+                            player = null;
+                            tails = [];
+                            poisons = [];
+                            myGameArea.end();
+                        }
+                    }
+                    if(player.x > (board.width - slotSize)) {
+                        player.x = 0;
+                    }
+                    if(player.x < 0) {
+                        player.x = (board.width - slotSize);
+                    }
+                    if(player.y > (board.height - slotSize)) {
+                        player.y = 0;
+                    }
+                    if(player.y < 0) {
+                        player.y = (board.height - slotSize);
+                    }
+                    player.update();
+                    for(let t = 0; t < tails.length; t++) {
+                        tails[t].newPos();
+                        tails[t].update();
+                        if(player.x == tails[t].x && player.y == tails[t].y) {
+                            player = null;
+                            tails = [];
+                            poisons = [];
+                            myGameArea.end();
+                        }
+                    }
+                }
+                
+            }
+
+            function controller(e) {
+                if(e.type == 'keydown') {
+                    if(['w','a','s','d','ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key) && player) {
+                        playerMove(e.key)
+                    }
+                }
+            }
+
+            function playerMove(key) {
+                if(key == 'w' || key == 'ArrowUp') {
+                    if(player.speedY !== 1 && (tails.length === 0 || !(tails[0].x === player.x && tails[0].y < player.y))) {
+                        player.speedY = -1
+                        player.speedX = 0
+                    }
+                }
+                if(key == 'a' || key == 'ArrowLeft') {
+                    if(player.speedX !== 1 && (tails.length === 0 || !(tails[0].y === player.y && tails[0].x < player.x))) {
+                        player.speedY = 0
+                        player.speedX = -1
+                    }
+                }
+                if(key == 's' || key == 'ArrowDown') {
+                    if(player.speedY !== -1 && (tails.length === 0 || !(tails[0].x === player.x && tails[0].y > player.y))) {
+                        player.speedY = 1
+                        player.speedX = 0
+                    }
+                }
+                if(key == 'd' || key == 'ArrowRight') {
+                    if(player.speedX !== -1 && (tails.length === 0 || !(tails[0].y === player.y && tails[0].x > player.x))) {
+                        player.speedY = 0
+                        player.speedX = 1
+                    }
+                }
+            }
+            
+            function getScores() {
+                if (window.XMLHttpRequest) {
+                    // code for IE7+, Firefox, Chrome, Opera, Safari
+                    xmlhttp = new XMLHttpRequest();
+                } else {
+                    // code for IE6, IE5
+                    xmlhttp = new ActiveXObject("Microsoft.XMLHTTP");
+                }
+                xmlhttp.onreadystatechange = function() {
+                    if (xmlhttp.readyState == 4 && xmlhttp.status == 200) {
+                        document.getElementById('Score').innerHTML = xmlhttp.responseText;
+                    }
+                };
+                xmlhttp.open("GET",'https://b2b.musical-express.com.br/assets/ajax/score.php',true);
+                xmlhttp.send();
+            }
+            
+            function save() {
+                const nickname = document.getElementById('nickname').value;
+                if (window.XMLHttpRequest) {
+                    // code for IE7+, Firefox, Chrome, Opera, Safari
+                    xmlhttp = new XMLHttpRequest();
+                } else {
+                    // code for IE6, IE5
+                    xmlhttp = new ActiveXObject("Microsoft.XMLHTTP");
+                }
+                xmlhttp.onreadystatechange = function() {
+                    if (xmlhttp.readyState == 4 && xmlhttp.status == 200) {
+                        getScores();
+                    }
+                };
+                xmlhttp.open("GET",'https://b2b.musical-express.com.br/assets/ajax/score.php?nick='+nickname+'&score='+points,true);
+                xmlhttp.send();
+            }
+</script>
+        <button type="button" onclick="window.location.reload()" style="background: #efefef;border:1px solid #ccc;padding:10px 14px;font-weight: bold;color:#222;">Recomeçar</button>
+        <form>
+            <input type="text" id="nickname" placeholder="Seu apelido" style="display: none;text-align: center;width:170px;padding: 10px 0;border-radius: 10px;border: 1px solid #444;background: transparent;color: #fff;border-bottom-left-radius: 0;border-bottom-right-radius: 0;" />
+            <button type="button" onclick="save()" style="background: #efefef;border:1px solid #efefef;padding:10px 0;font-weight: bold;color:#222;width: 172px;border-bottom-left-radius: 10px;border-bottom-right-radius: 10px;">Salvar Score</button>
+            <div id="Score"></div>
+        </form>
+    </body>
+</html>
